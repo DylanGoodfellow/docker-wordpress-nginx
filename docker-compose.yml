@@ -48,16 +48,18 @@ services:
       - NGINX_HOST=${NGINX_HOST:-wordpress.local}
     volumes:
       - wp_data:/var/www/html
-      - ./wordpress/plugins:/var/www/html/wp-content/plugins
-      - ./wordpress/themes:/var/www/html/wp-content/themes
+      - ./wordpress/:/var/www/html/wp-content/
       - ./.docker/nginx/conf.d:/etc/nginx/conf.d
     expose:
       - 80
     labels:
-      - traefik.enable=true
-      - traefik.http.routers.wordpress.rule=Host(`${NGINX_HOST:-wordpress.local}`)
-      - traefik.http.routers.wordpress.tls=true
-      - traefik.http.routers.wordpress.tls.certresolver=le
+    - traefik.enable=true
+    - traefik.http.routers.wordpress.rule=Host(`${NGINX_HOST:-wordpress.local}`)
+    - traefik.http.routers.wordpress.tls=true
+    - traefik.http.routers.wordpress.tls.certresolver=le
+    - traefik.http.routers.wordpress-www.rule=Host(`www.${NGINX_HOST:-wordpress.local}`)
+    - traefik.http.routers.wordpress-www.tls=true
+    - traefik.http.routers.wordpress-www.tls.certresolver=le
     extra_hosts:
       - ${NGINX_HOST:-wordpress.local}:127.0.0.1
     networks:
@@ -70,10 +72,9 @@ services:
   # Apache WordPress image but Nginx typically offers better static file performance.
   wordpress:
     depends_on:
-      db:
-        condition: service_healthy
-    # build: ./wordpress
-    image: wordpress:${WORDPRESS_VERSION:-6.0-fpm-alpine}
+      - db
+    build: .
+    image: wordpress:${WORDPRESS_VERSION:-6.4.2-php8.1-fpm-alpine}
     restart: always
     environment:
       WORDPRESS_DB_HOST: db:3306
@@ -89,10 +90,11 @@ services:
         define( 'RT_WP_NGINX_HELPER_CACHE_PATH', '/var/run/nginx-cache' );
     volumes:
       - wp_data:/var/www/html
-      - ./wordpress/plugins:/var/www/html/wp-content/plugins
-      - ./wordpress/themes:/var/www/html/wp-content/themes
+      - ./wordpress/:/var/www/html/wp-content/
       - ./.docker/php/custom.ini:/usr/local/etc/php/conf.d/custom.ini
+      - ./.docker/fpm/www.conf:/usr/local/etc/php-fpm.d/www.conf
       - ~/.ssh/id_rsa/:/root/.ssh/id_rsa
+      - ./scripts/:/scripts/
     extra_hosts:
       - ${NGINX_HOST:-wordpress.local}:10.5.0.100
     networks:
@@ -104,10 +106,9 @@ services:
   # server.
   wpcli:
     depends_on:
-      db:
-        condition: service_healthy
+      - db
     image: wordpress:cli
-    user: xfs
+    user: www-data
     environment:
       WORDPRESS_DB_HOST: db:3306
       WORDPRESS_DB_NAME: ${DB_NAME:-wordpress}
@@ -121,8 +122,7 @@ services:
         define( 'RT_WP_NGINX_HELPER_CACHE_PATH', '/var/run/nginx-cache' );
     volumes:
       - wp_data:/var/www/html
-      - ./wordpress/plugins:/var/www/html/wp-content/plugins
-      - ./wordpress/themes:/var/www/html/wp-content/themes
+      - ./wordpress/:/var/www/html/wp-content/
     networks:
       - wordpress
 
@@ -182,10 +182,8 @@ volumes:
 networks:
   traefik:
     driver: bridge
-    name: traefik
   wordpress:
     driver: bridge
-    name: wordpress
     ipam:
       driver: default
       config:
